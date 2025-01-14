@@ -17,14 +17,89 @@ const pressedKeys = {
     ArrowRight: false
 };
 
+const buildings = [];
+let backgroundOffset = 0;
+
+class Building {
+    constructor(x, y, width, height, windows) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.windows = windows;
+        this.color = '#2A2A3C';
+        this.windowColor = 'rgba(255, 248, 150, 0.3)';
+    }
+
+    draw() {
+        const currentX = this.x + backgroundOffset;
+        
+        // Draw building
+        ctx.fillStyle = this.color;
+        ctx.fillRect(currentX, canvas.height - this.height, this.width, this.height);
+        
+        // Draw windows
+        const windowWidth = 15;
+        const windowHeight = 20;
+        const windowSpacingX = 25;
+        const windowSpacingY = 30;
+        
+        for (let row = 0; row < this.windows.y; row++) {
+            for (let col = 0; col < this.windows.x; col++) {
+                // Randomly light up some windows
+                ctx.fillStyle = Math.random() > 0.7 ? 
+                    'rgba(255, 248, 150, 0.7)' : 
+                    this.windowColor;
+                
+                ctx.fillRect(
+                    currentX + 20 + (col * windowSpacingX),
+                    canvas.height - this.height + 20 + (row * windowSpacingY),
+                    windowWidth,
+                    windowHeight
+                );
+            }
+        }
+    }
+}
+
+function initBuildings() {
+    buildings.length = 0; // Clear existing buildings
+    
+    // Parameters for building generation
+    const buildingWidth = 100;
+    const spacing = 50;
+    let currentX = 0;
+    
+    // Generate buildings to fill screen width plus extra for scrolling
+    while (currentX < canvas.width + buildingWidth * 2) {
+        // Randomly decide if this is a high-rise or five-story building
+        const isHighRise = Math.random() < 0.2; // 20% chance for high-rise
+        
+        const height = isHighRise ? 500 : 150; // 20 stories vs 5 stories
+        const windows = {
+            x: 3,
+            y: isHighRise ? 15 : 4
+        };
+        
+        buildings.push(new Building(
+            currentX,
+            0,
+            buildingWidth,
+            height,
+            windows
+        ));
+        
+        currentX += buildingWidth + spacing;
+    }
+}
+
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    gridSize = 20; // Fixed grid size for consistent gameplay
+    gridSize = 20;
     tileCountX = Math.floor(canvas.width / gridSize);
     tileCountY = Math.floor(canvas.height / gridSize);
     
-    // Initialize snake and food positions after resize
     if (!snake) {
         snake = [{ 
             x: Math.floor(tileCountX / 2), 
@@ -32,6 +107,8 @@ function resizeCanvas() {
         }];
         food = spawnFood();
     }
+    
+    initBuildings(); // Initialize buildings after resize
 }
 
 // Add resize listener
@@ -44,77 +121,6 @@ function spawnFood() {
         y: Math.floor(Math.random() * tileCountY)
     };
 }
-
-// Fireworks array to store active fireworks
-let fireworks = [];
-
-class Firework {
-    constructor() {
-        this.x = Math.random() * canvas.width;
-        this.y = canvas.height;
-        this.targetY = Math.random() * (canvas.height * 0.5);
-        this.speed = 3 + Math.random() * 3;
-        this.particles = [];
-        this.exploded = false;
-        this.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
-    }
-
-    update() {
-        if (!this.exploded) {
-            this.y -= this.speed;
-            if (this.y <= this.targetY) {
-                this.explode();
-            }
-        } else {
-            for (let i = this.particles.length - 1; i >= 0; i--) {
-                const p = this.particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.vy += 0.1; // gravity
-                p.alpha -= 0.02;
-                if (p.alpha <= 0) this.particles.splice(i, 1);
-            }
-        }
-    }
-
-    explode() {
-        this.exploded = true;
-        for (let i = 0; i < 50; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * 3;
-            this.particles.push({
-                x: this.x,
-                y: this.y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                alpha: 1
-            });
-        }
-    }
-
-    draw() {
-        if (!this.exploded) {
-            ctx.beginPath();
-            ctx.fillStyle = this.color;
-            ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            for (const p of this.particles) {
-                ctx.beginPath();
-                ctx.fillStyle = `hsla(${this.color.match(/\d+/)[0]}, 100%, 50%, ${p.alpha})`;
-                ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-    }
-}
-
-// Add new firework occasionally
-setInterval(() => {
-    if (Math.random() < 0.3) { // 30% chance every 500ms
-        fireworks.push(new Firework());
-    }
-}, 500);
 
 document.addEventListener('keydown', (e) => {
     switch(e.key) {
@@ -134,6 +140,26 @@ document.addEventListener('keydown', (e) => {
 });
 
 function gameLoop() {
+    // Clear canvas with gradient sky
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#1a1a2e'); // Dark blue at top
+    gradient.addColorStop(1, '#4a4a6a'); // Lighter blue at bottom
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Update and draw buildings
+    backgroundOffset -= 0.5; // Adjust speed of background movement
+    if (Math.abs(backgroundOffset) >= (buildings[0].width + 50)) {
+        backgroundOffset = 0;
+        // Move first building to end
+        const firstBuilding = buildings.shift();
+        firstBuilding.x = buildings[buildings.length - 1].x + buildings[0].width + 50;
+        buildings.push(firstBuilding);
+    }
+    
+    // Draw all buildings
+    buildings.forEach(building => building.draw());
+
     // Clear canvas
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -143,15 +169,6 @@ function gameLoop() {
     ctx.font = '48px "Press Start 2P"';
     ctx.textAlign = 'center';
     ctx.fillText('Voronezh', canvas.width / 2, canvas.height / 2);
-
-    // Update and draw fireworks
-    for (let i = fireworks.length - 1; i >= 0; i--) {
-        fireworks[i].update();
-        fireworks[i].draw();
-        if (fireworks[i].exploded && fireworks[i].particles.length === 0) {
-            fireworks.splice(i, 1);
-        }
-    }
 
     // Move snake
     const head = { x: snake[0].x + dx, y: snake[0].y + dy };
