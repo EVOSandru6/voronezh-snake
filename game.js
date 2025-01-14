@@ -2,21 +2,51 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 let gridSize;
-let tileCount;
+let tileCountX;
+let tileCountY;
+let snake;
+let food;
+let dx = 0;
+let dy = 0;
+let score = 0;
 
-// Fireworks array to store active fireworks
-let fireworks = [];
+const pressedKeys = {
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false
+};
 
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    gridSize = Math.min(canvas.width, canvas.height) / 20;
-    tileCount = Math.min(canvas.width, canvas.height) / gridSize;
+    gridSize = 20; // Fixed grid size for consistent gameplay
+    tileCountX = Math.floor(canvas.width / gridSize);
+    tileCountY = Math.floor(canvas.height / gridSize);
+    
+    // Initialize snake and food positions after resize
+    if (!snake) {
+        snake = [{ 
+            x: Math.floor(tileCountX / 2), 
+            y: Math.floor(tileCountY / 2) 
+        }];
+        food = spawnFood();
+    }
 }
 
 // Add resize listener
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas(); // Initial resize
+
+function spawnFood() {
+    return {
+        x: Math.floor(Math.random() * tileCountX),
+        y: Math.floor(Math.random() * tileCountY)
+    };
+}
+
+// Fireworks array to store active fireworks
+let fireworks = [];
 
 class Firework {
     constructor() {
@@ -79,17 +109,6 @@ class Firework {
     }
 }
 
-let snake = [
-    { x: 10, y: 10 }
-];
-let food = {
-    x: Math.floor(Math.random() * tileCount),
-    y: Math.floor(Math.random() * tileCount)
-};
-let dx = 0;
-let dy = 0;
-let score = 0;
-
 // Add new firework occasionally
 setInterval(() => {
     if (Math.random() < 0.3) { // 30% chance every 500ms
@@ -136,28 +155,29 @@ function gameLoop() {
 
     // Move snake
     const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+    
+    // Wrap around screen edges
+    head.x = (head.x + tileCountX) % tileCountX;
+    head.y = (head.y + tileCountY) % tileCountY;
+    
     snake.unshift(head);
 
     // Check if snake ate food
     if (head.x === food.x && head.y === food.y) {
         score += 10;
-        food = {
-            x: Math.floor(Math.random() * tileCount),
-            y: Math.floor(Math.random() * tileCount)
-        };
+        food = spawnFood();
     } else {
         snake.pop();
     }
 
-    // Game over conditions
-    if (head.x < 0 || head.x >= tileCount || 
-        head.y < 0 || head.y >= tileCount ||
-        checkCollision()) {
+    // Game over only on self collision
+    if (checkCollision()) {
         alert(`Game Over! Score: ${score}`);
-        snake = [{ x: 10, y: 10 }];
+        snake = [{ x: Math.floor(tileCountX / 2), y: Math.floor(tileCountY / 2) }];
         dx = 0;
         dy = 0;
         score = 0;
+        food = spawnFood();
     }
 
     // Draw snake
@@ -193,13 +213,95 @@ function gameLoop() {
         padding * 2 + parseInt(ctx.font) * 0.8
     );
 
+    drawControls();
+
     setTimeout(gameLoop, 100);
 }
 
 function checkCollision() {
+    // Only check if snake hits itself
     return snake.slice(1).some(segment => 
-        segment.x === snake[0].x && segment.y === snake[0].y
+        Math.round(segment.x) === Math.round(snake[0].x) && 
+        Math.round(segment.y) === Math.round(snake[0].y)
     );
 }
+
+// Add this function to draw controls
+function drawControls() {
+    const padding = 20;
+    const buttonSize = 55; // Slightly larger buttons
+    const spacing = 5;    // Space between buttons
+    const cornerX = canvas.width - (buttonSize * 3) - padding;
+    const cornerY = canvas.height - (buttonSize * 3) - padding;
+    
+    function drawButton(x, y, rotation, key, text) {
+        const isPressed = pressedKeys[key];
+        const padding = 8; // Padding inside buttons
+        
+        // Button background with padding
+        ctx.fillStyle = isPressed ? 'rgba(100, 100, 100, 0.8)' : 'rgba(50, 50, 50, 0.8)';
+        ctx.beginPath();
+        ctx.roundRect(x, y, buttonSize, buttonSize, 10);
+        ctx.fill();
+
+        // Button border
+        ctx.strokeStyle = isPressed ? '#00ff00' : 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw arrow with adjusted position
+        ctx.save();
+        ctx.translate(x + buttonSize/2, y + buttonSize/2 - 5);
+        ctx.rotate(rotation * Math.PI / 180);
+        
+        // Arrow
+        ctx.fillStyle = isPressed ? '#00ff00' : 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.moveTo(-8, 4);
+        ctx.lineTo(8, 4);
+        ctx.lineTo(0, -8);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+
+        // Button text
+        ctx.fillStyle = isPressed ? '#00ff00' : 'rgba(255, 255, 255, 0.8)';
+        ctx.font = '10px "Press Start 2P"';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, x + buttonSize/2, y + buttonSize - padding);
+    }
+
+    // Semi-transparent background panel
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(
+        cornerX - padding,
+        cornerY - padding,
+        buttonSize * 3 + padding * 2 + spacing * 2,
+        buttonSize * 3 + padding * 2 + spacing * 2,
+        15
+    );
+    ctx.fill();
+
+    // Draw buttons
+    drawButton(cornerX + buttonSize + spacing, cornerY, 0, 'ArrowUp', 'UP');
+    drawButton(cornerX + buttonSize * 2 + spacing * 2, cornerY + buttonSize + spacing, 90, 'ArrowRight', 'RIGHT');
+    drawButton(cornerX + buttonSize + spacing, cornerY + buttonSize * 2 + spacing * 2, 180, 'ArrowDown', 'DOWN');
+    drawButton(cornerX, cornerY + buttonSize + spacing, 270, 'ArrowLeft', 'LEFT');
+}
+
+// Add these event listeners outside of any function, at the global scope
+document.addEventListener('keydown', (e) => {
+    if (pressedKeys.hasOwnProperty(e.key)) {
+        pressedKeys[e.key] = true;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (pressedKeys.hasOwnProperty(e.key)) {
+        pressedKeys[e.key] = false;
+    }
+});
 
 gameLoop(); 
